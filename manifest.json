@@ -1,0 +1,57 @@
+{
+  "manifest_version": 3,
+  "name": "AZ AI Assistant",
+  "version": "0.1",
+  "author": "Vaibhav mishra",
+  "description": "AI assistant",
+  "permissions": [
+    "storage",
+    "tabs"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://maang.in/*"
+      ],
+      "js": [
+        "content.js",
+        "highlight.min.js",
+        "marked.min.js"
+      ],
+      "css": ["default.min.css"]
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "web_accessible_resources" : [
+    {
+      "resources": [
+        "assets/bookmark.png",
+        "assets/play.png",
+        "assets/delete.png",
+        "assets/icon.png",
+        "assets/icon_light.png",
+        "assets/icon_dark.png",
+        "assets/drag.png",
+        "assets/send.png",
+        "assets/send_light.png",
+        "assets/drag_white.png",
+        "inject.js"
+      ],
+      "matches" : ["<all_urls>"]
+    }
+  ],
+  "action": {
+    "default_icon": {
+      "16": "assets/icon.png",
+      "24": "assets/icon.png",
+      "32": "assets/icon.png"
+    },
+    "default_popup": "popup.html",
+    "default_title": "Your Personal AI Guide to Mastering Code!"
+  },
+  "host_permissions": [
+    "https://cdn.jsdelivr.net/"
+  ]
+}
