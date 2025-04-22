@@ -37,3 +37,26 @@
         return originalSend.apply(this, arguments); // Call the original 'send' method
     };
 })();
+
+const style = document.createElement("style");
+style.innerHTML = `
+.feedback-button {
+    padding: 3px 7px;
+    font-size: 20px;
+    cursor: pointer;
+    border: none;
+    background-color: #e0e0e0;
+    border-radius: 3px;
+}
+.feedback-button:hover {
+    background-color:#6d6b6b;
+}
+.thumbs-up {
+    color: green;
+}
+.thumbs-down {
+    color: red;
+}
+`;
+document.head.appendChild(style);
+

@@ -23,6 +23,25 @@ async function setup() {
     injectScript();
     document.addEventListener("keydown", handleKeyboardShortcut);
 }
+function waitForElement(selector, timeout = 5000) {
+    return new Promise((resolve, reject) => {
+        const el = document.querySelector(selector);
+        if (el) return resolve(el);
+
+        const timer = setTimeout(() => reject(`Timeout: ${selector}`), timeout);
+        const observer = new MutationObserver(() => {
+            const element = document.querySelector(selector);
+            if (element) {
+                clearTimeout(timer);
+                observer.disconnect();
+                resolve(element);
+            }
+        });
+
+        observer.observe(document.body, { childList: true, subtree: true });
+    });
+}
+
 
 function handleKeyboardShortcut(event) {
     const aiButton = document.getElementById("ai-assistant-button");
@@ -249,46 +268,41 @@ function getIdFromUrl(url) {
     return pathSegments[pathSegments.length - 1];
 }
 
-function dataProvider() {
+async function dataProvider() {
     const proburl = window.location.href;
     const id = getIdFromUrl(proburl);
-    const problemName =
-        document.getElementsByClassName("problem_heading")[0]?.textContent || "";
+
+    const problemName = (await waitForElement(".problem_heading"))?.textContent || "";
+    const desc = (await waitForElement(".coding_markdown_typography__P_Sbv problem_paragraph"))?.textContent || "";
+
     const limits = document.getElementsByClassName("problem_paragraph");
     const timeLimit = limits[2]?.textContent || "";
     const memoryLimit = limits[4]?.textContent || "";
-    const desc =
-        document.getElementsByClassName("coding_desc__pltWY")[0]?.textContent || "";
 
-    const inOutConst = document.getElementsByClassName(
-        "coding_input_format__pv9fS"
-    );
+    const inOutConst = document.getElementsByClassName("coding_input_format__pv9fS");
     const input_format = inOutConst[0]?.textContent || "";
     const output_format = inOutConst[1]?.textContent || "";
     const constraints = inOutConst[2]?.textContent || "";
     const input = inOutConst[3]?.textContent || "";
     const output = inOutConst[4]?.textContent || "";
 
-    const code =
-        document.getElementsByClassName("view-lines monaco-mouse-cursor-text")[0]
-            ?.textContent || "";
+    const code = document.getElementsByClassName("view-lines monaco-mouse-cursor-text")[0]?.textContent || "";
 
-    const data = {
-        id: id,
-        problemName: problemName,
-        timeLimit: timeLimit,
-        memoryLimit: memoryLimit,
+    return {
+        id,
+        problemName,
+        timeLimit,
+        memoryLimit,
         description: desc,
         inputFormat: input_format,
         outputFormat: output_format,
-        constraints: constraints,
+        constraints,
         sampleInput: input,
         sampleOutput: output,
-        code: code,
+        code
     };
-
-    return data;
 }
+
 
 function formatProblem(problem) {
     const hints = problem?.hints || {};
@@ -1048,6 +1062,38 @@ function appendMessage(sender, message, container = null) {
     messageDiv.classList.add("chat-message");
     messageDiv.classList.add(sender === "You" ? "from-you" : "from-other");
 
+    //Button for AI response
+    if (sender !== "You") {
+        const feedbackContainer = document.createElement("div");
+        feedbackContainer.className = "feedback-container";
+        feedbackContainer.style.cssText = `
+            margin-top: 10px;
+            display: flex;
+            gap: 10px;
+        `;
+
+        const thumbsUp = document.createElement("button");
+        thumbsUp.textContent = "👍";
+        thumbsUp.title = "Good response";
+        thumbsUp.className = "feedback-button thumbs-up";
+
+        const thumbsDown = document.createElement("button");
+        thumbsDown.textContent = "👎";
+        thumbsDown.title = "Needs improvement";
+        thumbsDown.className = "feedback-button thumbs-down";
+
+        feedbackContainer.appendChild(thumbsUp);
+        feedbackContainer.appendChild(thumbsDown);
+        messageDiv.appendChild(feedbackContainer);
+
+        thumbsUp.onclick = () => saveFeedback("good", message);
+        thumbsDown.onclick = () => {
+            const improvement = prompt("What was wrong with the response?");
+            if (improvement) saveFeedback("bad", message, improvement);
+        };
+    }
+
+
     Object.assign(messageDiv.style, {
         padding: "10px",
         margin: sender === "You" ? "5px 20px 7px 0" : "5px 0 20px 0",
@@ -1126,11 +1172,27 @@ async function processMessageWithGroqAPI(chatHistory, apiKey) {
 
         let totalTokens = 0;
         const modified_chatHistory = [];
+
+        // Check for bad feedback
+        const problemId = window.currentProblemId || "global";
+        const feedbackKey = `feedback_${problemId}`;
+        const feedbackData = JSON.parse(localStorage.getItem(feedbackKey)) || [];
+
+        const badFeedbacks = feedbackData
+            .filter(fb => fb.type === "bad")
+            .map(fb => `- ${fb.improvement}`)
+            .join("\n");
+
+        const baseSystemPrompt = chatHistory[0].text;
+        const improvedSystemPrompt = badFeedbacks
+            ? `${baseSystemPrompt}\n\nAvoid the following mistakes based on prior feedback:\n${badFeedbacks}`
+            : baseSystemPrompt;
         // Add the system message to the modified history
         const system_message = {
             role: "system",
-            content: chatHistory[0].text,
+            content: improvedSystemPrompt,
         };
+
         totalTokens += estimateTokens(system_message.content);
 
         // Process the rest of the messages in reverse order
@@ -1182,3 +1244,21 @@ async function processMessageWithGroqAPI(chatHistory, apiKey) {
         return null;
     }
 }
+
+//this function saves the feedback to localstorage
+function saveFeedback(type, aiResponse, improvement = "") {
+    const problemId = window.currentProblemId || "global";
+    const feedbackKey = `feedback_${problemId}`;
+
+    const feedbackData = JSON.parse(localStorage.getItem(feedbackKey)) || [];
+
+    feedbackData.push({
+        type,
+        aiResponse,
+        improvement,
+        timestamp: new Date().toISOString(),
+    });
+
+    localStorage.setItem(feedbackKey, JSON.stringify(feedbackData));
+}
+
